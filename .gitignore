@@ -1,2 +1,5 @@
 .ipynb_*
 *.pyc
+*.pickle
+
+.idea
