@@ -7,9 +7,9 @@ from gptrials.reg import ForwardKinematicsRegression
 
 if __name__ == "__main__":
     outfile = "trained_gp.pickle"
-    r = Robot([1, 1, 1])
+    r = Robot()
 
-    fkr = ForwardKinematicsRegression(resolution=12)
+    fkr = ForwardKinematicsRegression(resolution=24)
     model = fkr.fit(r)
     with open(outfile, 'wb') as f:
         pickle.dump(model, f)
