@@ -44,8 +44,5 @@ fig = plt.figure(figsize=(10, 10))
 ax = fig.add_subplot(111, projection='3d')
 
 plot_implicit_function(ax, lambda x: gp_inference(m, x)[0], 0.0, color=(1, 0, 0, 0.2))
-plot_implicit_function(ax, lambda x: gp_inference(m, x)[0], 1.0, color=(0, 1, 0, 0.2))
-plot_implicit_function(ax, lambda x: gp_inference(m, x)[0], 2.0, color=(1, 0.5, 0, 0.2))
-plot_implicit_function(ax, lambda x: gp_inference(m, x)[0], 3.0, color=(0, 0, 1, 0.2))
 fig.tight_layout()
 plt.show()
