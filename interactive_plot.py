@@ -25,12 +25,16 @@ def evaluate_on_volume(func, interval, resolution):
     return data
 
 
+def create_mesh(func, level, interval, resolution):
+    volume = evaluate_on_volume(func, interval, resolution)
+    return marching_cubes(volume, level)
+
+
 def plot_implicit_function(ax, func, level,
                            interval=(0, 2 * np.pi),
                            resolution=24,
                            color=((0.5, 0.5, 0.5, 0.5))):
-    volume = evaluate_on_volume(func, interval, resolution)
-    verts, faces, normals, values = marching_cubes(volume, level)
+    verts, faces, normals, values = create_mesh(func, level, interval, resolution)
     mesh = Poly3DCollection(verts[faces])
     mesh.set_edgecolor((0, 0, 0, 0))
     mesh.set_facecolor(color)

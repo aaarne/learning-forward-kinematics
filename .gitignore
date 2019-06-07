@@ -1,3 +1,5 @@
 .ipynb_*
 *.pickle
 .idea
+*.obj
+*.stl
