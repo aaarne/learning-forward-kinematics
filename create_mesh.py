@@ -30,6 +30,10 @@ def create_mesh(func, level, interval, resolution):
 
 verts, faces, normal, values = create_mesh(lambda x: gp_inference(m, x)[0], 0.0, (0, 2*np.pi), 60)
 
+filename = "manifold.obj"
 import pymesh
 mesh = pymesh.form_mesh(verts, faces)
-pymesh.save_mesh("manifold.obj", mesh)
+pymesh.save_mesh(filename, mesh)
+print(f"""Mesh stored as wavefront model to {filename}.
+        You may want to solidify if using blender in order to print it.
+        Select File -> Import -> Wavefront and then modifiers -> solidify.""")
