@@ -38,7 +38,6 @@ public:
     const Eigen::MatrixXf* get_colors_unicurvature() { return &color_unicurvature_; }
     const Eigen::MatrixXf* get_colors_gaussian_curv() { return &color_gaussian_curv_; }
     const Eigen::MatrixXf* get_color_curvature() { return &color_curvature_; }
-    const Eigen::MatrixXf* get_textures() {return &texture_;};
     const unsigned int get_number_of_face() { return mesh_.n_faces(); }
 
     void load_mesh(const string& filename);
@@ -48,27 +47,11 @@ public:
     void calc_uniform_mean_curvature();
     void calc_gauss_curvature();
 
-
-    /*
-     * Exercise 1: Should Implememnt these functions
-     */
-    void map_suface_boundary_to_circle();
-
-    void iterative_solve_textures(int item_times = 10);
-
-    void direct_solve_textures();
-
-    /*
-    * Exercise 2: Should Implememnt these functions
-    */
-
-    void minimal_surface();
-
 private:
     void calc_weights();
     void calc_edges_weights();
     void calc_vertices_weights();
-    void init_textures();
+    void calc_fkin();
 
 private:
     Mesh mesh_;

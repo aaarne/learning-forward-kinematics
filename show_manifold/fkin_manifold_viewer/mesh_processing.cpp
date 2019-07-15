@@ -12,6 +12,7 @@
 //   Edited 2017
 //-----------------------------------------------------------------------------
 #include "mesh_processing.h"
+#include "robot.h"
 #include <Eigen/Dense>
 #include <set>
 #include <unordered_map>
@@ -41,243 +42,6 @@ namespace mesh_processing {
         load_mesh(filename);
     }
 
-// ======================================================================
-// EXERCISE Begin
-// ======================================================================
-
-// ======================================================================
-// EXERCISE 1.1 Mapping the Surface Boundary to 2D Circle
-// ========================================================================
-    void MeshProcessing::map_suface_boundary_to_circle() {
-
-        Mesh::Vertex_property <Vec2d> v_texture = mesh_.vertex_property<Vec2d>("v:texture", Vec2d(0.0));
-        int n_vertices = mesh_.n_vertices();
-        //Homework starting from here
-
-        // set everything to center of the circle
-        for (const auto &v : mesh_.vertices()) v_texture[v] = Vec2d(.5, .5);
-
-        /*
-         * Idea: we construct a map that maps every boundary halfedge to the cumulated length along the boundary.
-         * We start at some vertex on the boundary. Then we follow the halfedges on the boundary as long as we reach
-         * the first vertex again. At the same time we sum the edge lengths and store the cumulated length of for each
-         * boundary halfedge in the map.
-         */
-        Mesh::Vertex first_vertex;
-        std::map<Mesh::Halfedge, double> boundary_edges;
-        double cumulated_boundary_length = 0;
-
-        // Find some vertex to start with, which is on the boundary...
-        for (const auto &v : mesh_.vertices()) {
-            if (mesh_.is_boundary(v)) {
-                first_vertex = v;
-                break;
-            }
-        }
-        if (first_vertex.idx() < 0) throw std::runtime_error("mesh has no boundary!");
-
-        // ...then follow the boundary halfedges starting from it.
-        // (if we traverse cw or ccw doesn't matter and depends on the mesh).
-        Mesh::Halfedge h(-1);
-        Mesh::Vertex v = first_vertex;
-        do {
-            bool found = false;
-
-            // select next boundary halfedge not going backwards
-            for (const auto &h1 : mesh_.halfedges(v)) {
-                if (mesh_.is_boundary(h1) && mesh_.opposite_halfedge(h1) != h) {
-                    h = h1;
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) throw std::runtime_error("Error traversing boundary vertices");
-
-            // compute cumulated length and store the halfedge in the map
-            cumulated_boundary_length += mesh_.edge_length(mesh_.edge(h));
-            boundary_edges[h] = cumulated_boundary_length;
-            v = mesh_.to_vertex(h);
-        } while (v != first_vertex);
-
-        const double total_length = cumulated_boundary_length;
-        cout << "Found " << boundary_edges.size() << " boundary edges with a length of " << total_length << "." << endl;
-
-        // Set vertex position on unit circle. We compute the angle at which the vertex appears on the unit circle and
-        // map it to 2D coordinates using cosine and sine of that angle
-        for (const auto&[halfedge, cumulated_length] : boundary_edges) {
-            double phi = 2 * M_PI * cumulated_length / total_length;
-            v_texture[mesh_.to_vertex(halfedge)] = (Vec2d(cos(phi), sin(phi)) / 2) + Vec2d(.5, .5);
-        }
-        //Homework stopping from here
-
-        //Update the texture matrix￼
-        texture_ = Eigen::MatrixXf(2, n_vertices);
-        int j = 0;
-        for (auto v: mesh_.vertices()) {
-            texture_.col(j) << v_texture[v][0], v_texture[v][1];
-            j++;
-        }
-    }
-
-// ======================================================================
-// EXERCISE 1.2 Iterative Solve Textures
-// ========================================================================
-    void MeshProcessing::iterative_solve_textures(int item_times) {
-        int n_vertices = mesh_.n_vertices();
-        Mesh::Vertex_property <Vec2d> v_texture = mesh_.vertex_property<Vec2d>("v:texture", Vec2d(0.5, 0.5));
-
-        //Homework starting from here
-        Mesh::Vertex_property <Vec2d> v_texture_new = mesh_.vertex_property<Vec2d>("v:texturenew", Vec2d(0, 0));
-        Mesh::Edge_property <Scalar> e_weight = mesh_.edge_property<Scalar>("e:weight");
-
-        for (int i = 0; i < item_times; ++i) {
-            for (const auto &vi : mesh_.vertices()) {
-                float sum_edge_weights = 0.f;
-                v_texture_new[vi] = Vec2d(0, 0);
-                for (const auto &h : mesh_.halfedges(vi)) {
-                    const float h_weight = e_weight[mesh_.edge(h)];
-                    sum_edge_weights += h_weight;
-                    v_texture_new[vi] += h_weight * v_texture[mesh_.to_vertex(h)];
-                }
-                v_texture_new[vi] /= sum_edge_weights;
-            }
-
-            // override texture with new texture
-            for (const auto &v : mesh_.vertices()) {
-                if (!mesh_.is_boundary(v)) {
-                    v_texture[v] = v_texture_new[v];
-                }
-            }
-        }
-
-        mesh_.remove_vertex_property(v_texture_new);
-
-        //Homework stopping from here
-        //Update the texture matrix
-        texture_ = Eigen::MatrixXf(2, n_vertices);
-        int j = 0;
-        for (auto v: mesh_.vertices()) {
-            texture_.col(j) << v_texture[v][0], v_texture[v][1];
-            j++;
-        }
-
-    }
-
-// ======================================================================
-// EXERCISE 1.3 Direct Solve Textures
-// ========================================================================
-    void MeshProcessing::direct_solve_textures() {
-        Mesh::Vertex_property <Vec2d> v_texture = mesh_.vertex_property<Vec2d>("v:texture", Vec2d(0.0));
-        Mesh::Edge_property <Scalar> cotan = mesh_.edge_property<Scalar>("e:weight");
-        int n_vertices = mesh_.n_vertices();
-        //Homework starting from here
-        bool use_uniform_laplacian = false;
-
-        hrc::time_point begin = hrc::now();
-        Eigen::SparseMatrix<double> A(n_vertices, n_vertices);
-        Eigen::MatrixXd b(Eigen::MatrixXd::Zero(n_vertices, 2));
-        std::vector<Eigen::Triplet<double>> triplets;
-
-        // Construct matrices
-        for (const auto &v : mesh_.vertices()) {
-            if (mesh_.is_boundary(v)) {
-                b.row(v.idx()) << v_texture[v][0], v_texture[v][1];
-                triplets.emplace_back(v.idx(), v.idx(), 1);
-            } else {
-                double sum = 0;
-                for (const auto &h : mesh_.halfedges(v)) {
-                    double value = use_uniform_laplacian ? 1 : cotan[mesh_.edge(h)];
-                    assert(value >= 0);
-                    sum += value;
-                    triplets.emplace_back(v.idx(), mesh_.to_vertex(h).idx(), value);
-                }
-                triplets.emplace_back(v.idx(), v.idx(), -sum);
-            }
-        }
-
-        A.setFromTriplets(triplets.begin(), triplets.end());
-        Eigen::SparseLU<Eigen::SparseMatrix<double>> solver(A);
-        assert(solver.info() == Eigen::Success);
-        Eigen::MatrixXd U = solver.solve(b);
-        assert(solver.info() == Eigen::Success);
-
-        cout << "matrix " << A.rows() << "x" << A.cols() << endl;
-        cout << "b " << b.rows() << "x" << b.cols() << endl;
-        cout << "U " << U.rows() << "x" << U.cols() << endl;
-
-        // copy solution to vertex property
-        for (const auto &v : mesh_.vertices()) {
-            v_texture[v] = Vec2d(U(v.idx(), 0), U(v.idx(), 1));
-        }
-
-        cout << "Elapsed time for direct solve: "
-             << std::chrono::duration_cast<std::chrono::milliseconds>(hrc::now() - begin).count() << " ms." << endl;
-
-        //Homework stopping from here
-        //Update the texture matrix
-        texture_ = Eigen::MatrixXf(2, n_vertices);
-        int j = 0;
-        for (auto v: mesh_.vertices()) {
-            texture_.col(j) << v_texture[v][0], v_texture[v][1];
-            j++;
-        }
-    }
-
-// ======================================================================
-// EXERCISE 2 Minimal Surfaces
-// ======================================================================
-    void MeshProcessing::minimal_surface() {
-        const int n = mesh_.n_vertices();
-        auto cotan = mesh_.edge_property<Scalar>("e:weight");
-
-        Eigen::SparseMatrix<double> L(n, n);
-        Eigen::MatrixXd rhs(Eigen::MatrixXd::Zero(n, 3));
-        std::vector<Eigen::Triplet<double> > triplets_L;
-
-        for (const auto &v : mesh_.vertices()) {
-            if (mesh_.is_boundary(v)) {
-                Vec3d p = mesh_.position(v);
-                rhs.row(v.idx()) << p.x, p.y, p.z;
-                triplets_L.emplace_back(v.idx(), v.idx(), 1);
-            } else {
-                double sum = 0;
-                for (const auto &h : mesh_.halfedges(v)) {
-                    double value = cotan[mesh_.edge(h)];
-                    sum += value;
-                    triplets_L.emplace_back(v.idx(), mesh_.to_vertex(h).idx(), value);
-                }
-                triplets_L.emplace_back(v.idx(), v.idx(), -sum);
-            }
-        }
-
-        L.setFromTriplets(triplets_L.begin(), triplets_L.end());
-        Eigen::SparseLU<Eigen::SparseMatrix<double>> solver(L);
-        if (solver.info() != Eigen::Success) {
-            printf("linear solver init failed.\n");
-        }
-        Eigen::MatrixXd X = solver.solve(rhs);
-        if (solver.info() != Eigen::Success) {
-            printf("linear solver failed.\n");
-        }
-
-        for (const auto &v : mesh_.vertices()) {
-            if (mesh_.is_boundary(v)) continue;
-            Eigen::Vector3d x = X.row(v.idx());
-            mesh_.position(v) = Vec3d(x(0), x(1), x(2));
-        }
-
-        int zeros = 0;
-        for (const auto &e : mesh_.edges()) {
-            if (cotan[e] == 0) zeros++;
-        }
-
-        cout << zeros << " out of " << mesh_.n_edges() << " cotan weights were 0." << endl;
-    }
-
-// ======================================================================
-// EXERCISE End
-// ======================================================================
 
 
     void MeshProcessing::calc_weights() {
@@ -487,38 +251,12 @@ namespace mesh_processing {
 
         compute_mesh_properties();
 
-        init_textures();
-
         // Store the original mesh, this might be useful for some computations
         mesh_init_ = mesh_;
     }
 
-    void MeshProcessing::init_textures() {
-        Mesh::Vertex_property <Vec2d> v_texture = mesh_.vertex_property<Vec2d>("v:texture", Vec2d(0, 0));
-        int n_vertices = mesh_.n_vertices();
-        texture_ = Eigen::MatrixXf(2, n_vertices);
-        int j = 0;
-
-        double min[3] = {1e10, 1e10, 1e10};
-        double max[3] = {-1e10, -1e10, -1e10};
-        for (auto v : mesh_.vertices()) {
-            Point p = mesh_.position(v);
-            for (int kd = 0; kd < 3; kd++) {
-                if (p[kd] < min[kd]) min[kd] = p[kd];
-                if (p[kd] > max[kd]) max[kd] = p[kd];
-            }
-        }
-        for (auto v: mesh_.vertices()) {
-            Point p = mesh_.position(v);
-            v_texture[v][0] = (p[0] - min[0]) / (max[0] - min[0]);
-            v_texture[v][1] = (p[1] - min[1]) / (max[1] - min[1]);
-            texture_.col(j) << v_texture[v][0],
-                    v_texture[v][1];
-            j++;
-        }
-    }
-
     void MeshProcessing::compute_mesh_properties() {
+
         Mesh::Vertex_property <Point> vertex_normal =
                 mesh_.vertex_property<Point>("v:normal");
         mesh_.update_face_normals();
@@ -548,15 +286,13 @@ namespace mesh_processing {
                 mesh_.vertex_property<Scalar>("v:curvature", 0.0f);
         Mesh::Vertex_property <Scalar> v_gauss_curvature =
                 mesh_.vertex_property<Scalar>("v:gauss_curvature", 0.0f);
+        Mesh::Vertex_property<Scalar> v_y = mesh_.vertex_property<Scalar>("v:y", 0.0f);
+        Mesh::Vertex_property<Scalar> v_omega = mesh_.vertex_property<Scalar>("v:omega", 0.0f);
 
-        calc_weights();
-        calc_uniform_mean_curvature();
-        calc_mean_curvature();
-        calc_gauss_curvature();
-        color_coding(vertex_valence, &mesh_, v_color_valence, 100 /* bound */);
-        color_coding(v_unicurvature, &mesh_, v_color_unicurvature);
-        color_coding(v_curvature, &mesh_, v_color_curvature);
-        color_coding(v_gauss_curvature, &mesh_, v_color_gaussian_curv);
+
+        calc_fkin();
+        color_coding(v_omega, &mesh_, v_color_valence);
+        color_coding(v_y, &mesh_, v_color_gaussian_curv);
 
         // get the mesh attributes and upload them to the GPU
         int j = 0;
@@ -669,4 +405,29 @@ namespace mesh_processing {
     }
 
     MeshProcessing::~MeshProcessing() {}
+
+    void MeshProcessing::calc_fkin() {
+        Mesh::Vertex_property<Scalar> v_y = mesh_.vertex_property<Scalar>("v:y", 0.0f);
+        Mesh::Vertex_property<Scalar> v_omega = mesh_.vertex_property<Scalar>("v:omega", 0.0f);
+
+        std::vector<float> vals;
+        for (const auto &v : mesh_.vertices()) {
+            vals.push_back(mesh_.position(v).x);
+        }
+        double max = *std::max_element(vals.begin(), vals.end());
+
+        robot r(1.0, 1.0, 1.0);
+
+        auto pos2angle = [max](double pos){
+            return 2*M_PI*pos/max;
+        };
+
+        for (const auto &v : mesh_.vertices()) {
+            double q1 = pos2angle(mesh_.position(v).x);
+            double q2 = pos2angle(mesh_.position(v).y);
+            double q3 = pos2angle(mesh_.position(v).z);
+            v_y[v] = r.fkin_y(q1, q2, q3);
+            v_omega[v] = r.fkin_omega(q1, q2, q3);
+        }
+    }
 }

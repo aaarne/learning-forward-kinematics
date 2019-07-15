@@ -7,6 +7,7 @@ import pickle
 with open("model.pickle", "rb") as f:
     m = pickle.load(f)
 
+print("Loaded model.")
 
 def gp_inference(model, joint_angles):
     raw = model.predict(joint_angles.reshape(1, -1)).flatten()
@@ -27,8 +28,9 @@ def create_mesh(func, level, interval, resolution):
     volume = evaluate_on_volume(func, interval, resolution)
     return marching_cubes(volume, level)
 
-
-verts, faces, normal, values = create_mesh(lambda x: gp_inference(m, x)[0], 0.0, (0, 2*np.pi), 60)
+print("Start evaluation")
+verts, faces, normal, values = create_mesh(lambda x: gp_inference(m, x)[0], 0.0, (0, 2*np.pi), 120)
+print("Finished evaluation")
 
 filename = "manifold.obj"
 import pymesh

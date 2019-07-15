@@ -333,71 +333,9 @@ Viewer::Viewer() : nanogui::Screen(Eigen::Vector2i(1024, 768), "DGP Viewer") {
     window_->setPosition(Vector2i(15, 15));
     window_->setLayout(new GroupLayout());
 
-    PopupButton *popupBtn = new PopupButton(window_, "Open a mesh", ENTYPO_ICON_EXPORT);
-    Popup *popup = popupBtn->popup();
-    popup->setLayout(new GroupLayout());
-
-    Button* b;
-    b = new Button(popup, "Max Head");
-    b->setCallback([this]() {
-        mesh_->load_mesh("../data/Maxplanck.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-    b = new Button(popup, "Max Face");
-    b->setCallback([this]() {
-        mesh_->load_mesh("../data/bad_max.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-    b = new Button(popup, "cylinder1");
-    b->setCallback([this]() {
-        mesh_->load_mesh("../data/cylinder1.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-    b = new Button(popup, "cylinder2");
-    b->setCallback([this]() {
-        mesh_->load_mesh("../data/cylinder2.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-    b = new Button(popup, "cylinder3");
-    b->setCallback([this]() {
-        mesh_->load_mesh("../data/cylinder3.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-    b = new Button(popup, "UNIL Fox");
-    b->setCallback([this]() {
-        mesh_->load_mesh("../data/fuchs.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-    b = new Button(popup, "Moebius Strip");
-    b ->setCallback([this]() {
-        mesh_->load_mesh("../data/mobius.obj");
-        this->refresh_mesh();
-        this->refresh_trackball_center();
-    });
-
-    b = new Button(popup, "Open mesh ...");
-    b->setCallback([this]() {
-        string filename = nanogui::file_dialog({{"obj", "Wavefront OBJ"},
-                                         {"ply", "Stanford PLY"},
-                                         {"aln", "Aligned point cloud"},
-                                         {"off", "Object File Format"}
-                                        }, false);
-        if (filename != "") {
-            mesh_->load_mesh(filename);
-            this->refresh_mesh();
-            this->refresh_trackball_center();
-        }
-    });
-
     new Label(window_, "Display Control", "sans-bold");
 
-    b = new Button(window_, "Wireframe");
+    Button *b = new Button(window_, "Wireframe");
     b->setFlags(Button::ToggleButton);
     b->setChangeCallback([this](bool wireframe) {
         this->wireframe_ =! this->wireframe_;
@@ -409,44 +347,26 @@ Viewer::Viewer() : nanogui::Screen(Eigen::Vector2i(1024, 768), "DGP Viewer") {
         this->normals_ =! this->normals_;
     });
 
-    b = new Button(window_, "Valence");
-    b->setFlags(Button::ToggleButton);
-    b->setChangeCallback([this](bool valence) {
+    Button* by = new Button(window_, "Task Coordinate Y");
+    Button* bphi = new Button(window_, "Task Coordinate Φ");
+    by->setFlags(Button::ToggleButton);
+    by->setChangeCallback([this, bphi](bool valence) {
         if (valence) {
-            this->color_mode = VALENCE;
+            this->color_mode = CURVATURE;
+            this->curvature_type = GAUSS;
+            bphi->setPushed(false);
         } else {
             this->color_mode = NORMAL;
         }
     });
-
-    new Label(window_, "Texture Smoothing", "sans-bold");
-    popupBtn = new PopupButton(window_, "Texture Smooth");
-    popup = popupBtn->popup();
-    popup->setLayout(new GroupLayout());
-    b = new Button(popup, "Mapping Boundary");
-    b->setCallback([this]() {
-        mesh_->map_suface_boundary_to_circle();
-        this->refresh_mesh();
-    });
-    b = new Button(popup, "Iterative Solve");
-    b->setCallback([this]() {
-        mesh_->iterative_solve_textures();
-        mesh_->compute_mesh_properties();
-        this->refresh_mesh();
-    });
-
-    b = new Button(popup, "Direct Solve");
-    b->setCallback([this]() {
-        mesh_->direct_solve_textures();
-        mesh_->compute_mesh_properties();
-        this->refresh_mesh();
-    });
-
-    b = new Button(window_, "Minimal Surface");
-    b->setCallback([this]() {
-        mesh_->minimal_surface();
-        mesh_->compute_mesh_properties();
-        this->refresh_mesh();
+    bphi->setFlags(Button::ToggleButton);
+    bphi->setChangeCallback([this,by](bool valence) {
+        if (valence) {
+            this->color_mode = VALENCE;
+            by->setPushed(false);
+        } else {
+            this->color_mode = NORMAL;
+        }
     });
 
     mesh_ = new mesh_processing::MeshProcessing("../../../manifold.obj");
@@ -476,6 +396,7 @@ void Viewer::refresh_mesh() {
     shader_.uploadIndices(*(mesh_->get_indices()));
     shader_.uploadAttrib("position", *(mesh_->get_points()));
     shader_.uploadAttrib("valence_color", *(mesh_->get_colors_valence()));
+    shader_.uploadAttrib("gaussian_curv_color", *(mesh_->get_colors_gaussian_curv()));
     shader_.uploadAttrib("normal", *(mesh_->get_normals()));
     shader_.setUniform("color_mode", int(color_mode));
     shader_.setUniform("intensity", Vector3f(0.98, 0.59, 0.04));
@@ -488,7 +409,6 @@ void Viewer::refresh_mesh() {
     shaderTexture_.bind();
     shaderTexture_.shareAttrib(shader_, "indices");
     shaderTexture_.shareAttrib(shader_, "position");
-    shaderTexture_.uploadAttrib("texUV", *mesh_->get_textures());
 
 }
 
