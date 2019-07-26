@@ -3,3 +3,5 @@
 .idea
 *.obj
 *.stl
+*__pychache__*
+puffpastry/__pycache__
