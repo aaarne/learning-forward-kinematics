@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy as np
 
 from puffpastry.planar_robot import PlanarRobot
@@ -6,9 +8,9 @@ from puffpastry.tools import Timer
 
 
 test_robot = PlanarRobot([1, 1, 1])
-resolution = 12
+resolution = 60
 
-#model = GPForwardKinematicsRegression(resolution=resolution).fit(test_robot)
+#model = GPForwardKinematicsRegression(resolution=12).fit(test_robot)
 model = KerasForwardKinematicsRegression(resolution=resolution).fit(test_robot)
 
 def evaluate_model(model, n_samples=10000):
@@ -51,7 +53,7 @@ for index, coor in enumerate(['x', 'y', 'φ']):
     else:
         ax.set_xlabel("Orientation deviation in rad")
 
-#plt.show()
+plt.show()
 
 import pickle
 with open("model.pickle", "wb") as f:
